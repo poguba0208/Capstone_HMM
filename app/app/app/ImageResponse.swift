@@ -8,7 +8,7 @@ struct ImageResponse: Codable {
 }
 
 func uploadImage(image: UIImage, completion: @escaping (ImageResponse?) -> Void) {
-    guard let url = URL(string: "http://localhost:8080/api/images/upload") else { return }
+    guard let url = URL(string: "http://127.0.0.1:8080/api/images/upload") else { return }
     
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
