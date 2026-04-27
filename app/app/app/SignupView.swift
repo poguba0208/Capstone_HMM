@@ -113,25 +113,18 @@ struct SignupView: View {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let httpResponse = response as? HTTPURLResponse else { return }
             
             DispatchQueue.main.async {
-                
-                if let error = error {
-                    message = "회원가입 실패: \(error.localizedDescription)"
-                    showAlert = true
-                    return
+                if httpResponse.statusCode == 200 {
+                    message = "회원가입 성공 🎉"
+                } else if httpResponse.statusCode == 409 {
+                    message = "이미 존재하는 이메일입니다 ❗️"
+                } else {
+                    message = "회원가입 실패 😢"
                 }
-                
-                if let response = response as? HTTPURLResponse {
-                    if response.statusCode == 200 || response.statusCode == 201 {
-                        message = "회원가입 성공!"
-                    } else {
-                        message = "회원가입 실패 (코드: \(response.statusCode))"
-                    }
-                    showAlert = true
-                }
+                showAlert = true
             }
-            
         }.resume()
     }
 }
