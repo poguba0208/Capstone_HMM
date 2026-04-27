@@ -7,6 +7,7 @@ struct MainView: View {
     @State private var selectedItem: PhotosPickerItem?
     @State private var selectedImage: UIImage?
     @State private var goLoading = false
+    @State private var isLoggedIn = false
     
     var body: some View {
         NavigationStack {
@@ -58,24 +59,30 @@ struct MainView: View {
                     
                     Spacer()
                     
-                    Button {
-                        showLogin = true
-                    } label: {
-                        Text("로그인 / 회원가입")
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                LinearGradient(colors: [Color.purple, Color.blue],
-                                               startPoint: .leading,
-                                               endPoint: .trailing)
-                            )
-                            .cornerRadius(10)
-                            .padding(.horizontal, 40)
+                    if isLoggedIn {
+                            Text("로그인 완료 👋")
+                                .foregroundColor(.green)
+                                .padding(.bottom, 20)
+                        } else {
+                            Button {
+                                showLogin = true
+                            } label: {
+                                Text("로그인 / 회원가입")
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(
+                                        LinearGradient(colors: [Color.purple, Color.blue],
+                                                       startPoint: .leading,
+                                                       endPoint: .trailing)
+                                    )
+                                    .cornerRadius(10)
+                                    .padding(.horizontal, 40)
+                            }
+                            .padding(.bottom, 20)
+                        }
                     }
-                    .padding(.bottom, 20)
-                }
-                .blur(radius: (showSignup || showLogin) ? 5 : 0)
+                    .blur(radius: (showSignup || showLogin) ? 5 : 0)
                 
                 if showSignup || showLogin {
                     Color.black.opacity(0.3)
@@ -87,7 +94,7 @@ struct MainView: View {
                 }
                 
                 if showLogin {
-                    LoginView(showLogin: $showLogin, showSignup: $showSignup)
+                    LoginView(showLogin: $showLogin, showSignup: $showSignup, isLoggedIn: $isLoggedIn)
                         .transition(.move(edge: .bottom))
                 }
                 
@@ -95,6 +102,8 @@ struct MainView: View {
                     SignupView(showSignup: $showSignup, showLogin: $showLogin)
                         .transition(.move(edge: .bottom))
                 }
+                
+                
             }
             
             .onChange(of: selectedItem) { newItem in

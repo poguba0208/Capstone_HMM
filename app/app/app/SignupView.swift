@@ -8,6 +8,9 @@ struct SignupView: View {
     @State private var email = ""
     @State private var password = ""
     
+    @State private var message = ""
+    @State private var showAlert = false
+    
     var body: some View {
         VStack {
             Spacer()
@@ -79,11 +82,14 @@ struct SignupView: View {
             .frame(height: 500)
             .background(Color.white)
             .cornerRadius(25)
+            .alert(isPresented: $showAlert) {
+                Alert(title: Text(message))
+            }
         }
     }
     
     func signup() {
-        guard let url = URL(string: "http://172.16.8.189:8080/api/users/signup") else {
+        guard let url = URL(string: "http://127.0.0.1:8080/api/users/signup") else {
             print("URL 오류")
             return
         }
@@ -107,21 +113,18 @@ struct SignupView: View {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let httpResponse = response as? HTTPURLResponse else { return }
             
-            if let error = error {
-                print("에러:", error.localizedDescription)
-                return
+            DispatchQueue.main.async {
+                if httpResponse.statusCode == 200 {
+                    message = "회원가입 성공 🎉"
+                } else if httpResponse.statusCode == 409 {
+                    message = "이미 존재하는 이메일입니다 ❗️"
+                } else {
+                    message = "회원가입 실패 😢"
+                }
+                showAlert = true
             }
-            
-            if let response = response as? HTTPURLResponse {
-                print("상태 코드:", response.statusCode)
-            }
-            
-            if let data = data {
-                let result = String(data: data, encoding: .utf8)
-                print("응답:", result ?? "")
-            }
-            
         }.resume()
     }
 }

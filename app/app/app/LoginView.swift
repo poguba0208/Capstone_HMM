@@ -3,9 +3,14 @@ import SwiftUI
 struct LoginView: View {
     @Binding var showLogin: Bool
     @Binding var showSignup: Bool
+    @Binding var isLoggedIn: Bool
     
     @State private var email = ""
     @State private var password = ""
+    
+    @State private var message = ""
+    @State private var showAlert = false
+    
     
     var body: some View {
         ZStack {
@@ -81,6 +86,9 @@ struct LoginView: View {
                 .frame(height: 450)
                 .background(Color.white)
                 .cornerRadius(25)
+                .alert(isPresented: $showAlert) {
+                    Alert(title: Text(message))
+                }
             }
         }
     }
@@ -99,7 +107,22 @@ struct LoginView: View {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        URLSession.shared.dataTask(with: request).resume()
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let httpResponse = response as? HTTPURLResponse else { return }
+            
+            DispatchQueue.main.async {
+                if httpResponse.statusCode == 200 {
+                    message = "로그인 성공 🎉"
+                    showAlert = true
+                    
+                    isLoggedIn = true
+                    showLogin = false
+                } else {
+                    message = "로그인 실패 😢"
+                    showAlert = true
+                }
+            }
+        }.resume()
     }
 }
 
@@ -107,7 +130,8 @@ struct LoginView_Previews: PreviewProvider {
     static var previews: some View {
         LoginView(
             showLogin: .constant(true),
-            showSignup: .constant(false)
+            showSignup: .constant(false),
+            isLoggedIn: .constant(false)
         )
     }
 }
