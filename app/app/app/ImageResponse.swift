@@ -1,0 +1,72 @@
+import UIKit
+
+struct ImageResponse: Codable {
+    let imageId: Int
+    let originalUrl: String
+    let processedUrl: String
+    let riskScore: Double
+}
+
+func resizeImage(image: UIImage, maxWidth: CGFloat) -> UIImage {
+    let ratio = maxWidth / image.size.width
+    if ratio >= 1 { return image } // 이미 작으면 그대로
+    let newSize = CGSize(width: maxWidth, height: image.size.height * ratio)
+    UIGraphicsBeginImageContext(newSize)
+    image.draw(in: CGRect(origin: .zero, size: newSize))
+    let resized = UIGraphicsGetImageFromCurrentImageContext()!
+    UIGraphicsEndImageContext()
+    return resized
+}
+
+func uploadImage(image: UIImage, completion: @escaping (ImageResponse?) -> Void) {
+    guard let url = URL(string: "http://localhost:8080/api/images/upload") else { return }
+    
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    
+    let boundary = UUID().uuidString
+    request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+    
+    var data = Data()
+    
+    let resized = resizeImage(image: image, maxWidth: 1024)
+    guard let imageData = resized.jpegData(compressionQuality: 0.5) else { return }
+    
+    data.append("--\(boundary)\r\n".data(using: .utf8)!)
+    data.append("Content-Disposition: form-data; name=\"file\"; filename=\"image.jpg\"\r\n".data(using: .utf8)!)
+    data.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+    data.append(imageData)
+    data.append("\r\n".data(using: .utf8)!)
+    
+    data.append("--\(boundary)\r\n".data(using: .utf8)!)
+    data.append("Content-Disposition: form-data; name=\"option\"\r\n\r\n".data(using: .utf8)!)
+    data.append("strong\r\n".data(using: .utf8)!)
+    
+    data.append("--\(boundary)--\r\n".data(using: .utf8)!)
+    
+    request.httpBody = data
+    
+    URLSession.shared.dataTask(with: request) { data, response, error in
+        if let error = error {
+            print("❌ 네트워크 오류: \(error.localizedDescription)")
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            print("📥 응답 코드: \(httpResponse.statusCode)")
+        }
+        
+        guard let data = data else {
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+        
+        print("📦 응답 데이터: \(String(data: data, encoding: .utf8) ?? "파싱 불가")")
+        
+        let result = try? JSONDecoder().decode(ImageResponse.self, from: data)
+        DispatchQueue.main.async {
+            completion(result)
+        }
+    }.resume()
+}
