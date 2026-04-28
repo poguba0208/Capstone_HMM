@@ -69,9 +69,15 @@ func uploadImage(image: UIImage, completion: @escaping (ImageResponse?) -> Void)
         
         print("📦 응답 데이터: \(String(data: data, encoding: .utf8) ?? "파싱 불가")")
         
-        let result = try? JSONDecoder().decode(ImageResponse.self, from: data)
-        DispatchQueue.main.async {
-            completion(result)
-        }
+        if let decoded = try? JSONDecoder().decode(ImageResponse.self, from: data) {
+                    let fixedUrl = decoded.resultUrl.replacingOccurrences(
+                        of: "http://localhost:8080",
+                        with: "http://172.16.8.189:8080"
+                    )
+                    let fixedResult = ImageResponse(imageId: decoded.imageId, resultUrl: fixedUrl)
+                    DispatchQueue.main.async { completion(fixedResult) }
+                } else {
+                    DispatchQueue.main.async { completion(nil) }
+                }
     }.resume()
 }

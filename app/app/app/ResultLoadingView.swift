@@ -11,7 +11,7 @@ struct ResultLoadingView: View {
     var body: some View {
         Group {
             if let result = result {
-                ResultView(result: result, onDismiss: { dismiss() })
+                ResultView(image: image, result: result, onDismiss: { dismiss() })
                     .navigationBarHidden(true)
             } else {
                 VStack(spacing: 20) {
