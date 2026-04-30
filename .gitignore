@@ -148,3 +148,6 @@ out/
 .vscode/
 uploads/
 
+.ipynb_checkpoints/
+*.egg-info/
+__pycache__/
