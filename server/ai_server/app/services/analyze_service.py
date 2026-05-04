@@ -2,12 +2,21 @@ import os
 import sys
 import tempfile
 
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+_BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
-from model.risk_analyzer.detect_face import detect_face
-from model.risk_analyzer.head_pose import get_head_pose
+# regressor.py 내부의 `from model import SixDRepNet` 와 `import utils` 가
+# sixdrepnet/model.py, sixdrepnet/utils.py 를 찾도록 sixdrepnet/ 을 추가
+_SIXDREPNET_DIR = os.path.join(_BASE, "model", "6DRepNet", "sixdrepnet")
+# detect_face, head_pose 를 직접 import
+_RISK_ANALYZER_DIR = os.path.join(_BASE, "model", "risk_analyzer")
+
+for _p in [_SIXDREPNET_DIR, _RISK_ANALYZER_DIR]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# 프로젝트 루트를 sys.path 에 넣으면 'model' 패키지 이름이 충돌하므로 직접 import
+from detect_face import detect_face
+from head_pose import get_head_pose
 
 
 def _calculate_risk(face_ratio: float, yaw: float) -> dict:
