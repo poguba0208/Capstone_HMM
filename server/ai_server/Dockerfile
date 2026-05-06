@@ -17,7 +17,7 @@ RUN pip install -e /app/model/6DRepNet
 
 # 모델 코드 및 가중치
 COPY model/risk_analyzer /app/model/risk_analyzer
-COPY model/weights /app/model/weights
+COPY weights /app/model/weights
 
 # 서버 코드
 COPY server/ai_server/app /app/app
