@@ -1,7 +1,7 @@
 import cv2
 from sixdrepnet import SixDRepNet
 
-pose_model = SixDRepNet()
+pose_model = SixDRepNet(gpu_id=0)
 
 def get_head_pose(face_crop):
     if face_crop is None:

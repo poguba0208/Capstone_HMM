@@ -1,0 +1,5 @@
+server/ai_server/myenv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+model/6DRepNet/sixdrepnet.egg-info/

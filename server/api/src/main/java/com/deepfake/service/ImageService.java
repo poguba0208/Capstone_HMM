@@ -2,8 +2,10 @@ package com.deepfake.service;
 
 import com.deepfake.domain.Image;
 import com.deepfake.domain.User;
+import com.deepfake.dto.AnalyzeResult;
 import com.deepfake.dto.ImageResponse;
 import com.deepfake.dto.ImageUploadResponse;
+import com.deepfake.external.FaceShieldClient;
 import com.deepfake.repository.ImageRepository;
 import com.deepfake.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,11 +22,13 @@ public class ImageService {
 
     private final ImageRepository imageRepository;
     private final UserRepository userRepository;
+    private final FaceShieldClient faceShieldClient;
 
     @Autowired
-    public ImageService(ImageRepository imageRepository, UserRepository userRepository) {
+    public ImageService(ImageRepository imageRepository, UserRepository userRepository, FaceShieldClient faceShieldClient) {
         this.imageRepository = imageRepository;
         this.userRepository = userRepository;
+        this.faceShieldClient = faceShieldClient;
     }
 
     public ImageUploadResponse uploadImage(MultipartFile file, Long userId) {
@@ -48,7 +52,9 @@ public class ImageService {
 
             String url = "http://localhost:8080/uploads/" + fileName;
 
-            return new ImageUploadResponse(image.getId(), url);
+            AnalyzeResult analyzeResult = faceShieldClient.analyze(file);
+
+            return new ImageUploadResponse(image.getId(), url, analyzeResult);
 
         } catch (IOException e) {
             throw new RuntimeException("파일 저장 실패");
@@ -56,6 +62,8 @@ public class ImageService {
     }
 
     public List<ImageResponse> getMyImages(Long userId) {
+
+        if (userId == null) throw new RuntimeException("유저 없음");
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("유저 없음"));
@@ -77,6 +85,7 @@ public class ImageService {
         if (!dir.exists()) dir.mkdirs();
 
         String originalFileName = file.getOriginalFilename();
+        if (originalFileName == null) throw new IOException("파일명 없음");
         File saveFile = new File(uploadDir + originalFileName);
 
         int count = 1;
