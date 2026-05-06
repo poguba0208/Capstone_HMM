@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+
+# FastAPI AI 서버 주소
+# 로컬: 환경변수 없으면 localhost:8000 기본값 사용
+# RunPod 배포 시: AI_SERVER_URL=https://{pod-id}-8000.proxy.runpod.net 환경변수 설정
+ai:
+  server:
+    url: ${AI_SERVER_URL:http://localhost:8000}

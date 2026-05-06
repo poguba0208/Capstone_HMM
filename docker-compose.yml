@@ -1,0 +1,31 @@
+services:
+
+  spring-server:
+    build:
+      context: ./server/api
+      dockerfile: Dockerfile
+
+    container_name: deepfake-spring
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      - ai-server
+
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+  ai-server:
+    build:
+      context: .
+      dockerfile: ./server/ai_server/Dockerfile
+
+    container_name: deepfake-ai
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./server/ai_server/uploads:/app/uploads
+      - ./server/ai_server/protected:/app/protected
