@@ -25,26 +25,37 @@ public class FaceShieldClient {
     }
 
     public AnalyzeResult analyze(MultipartFile file) throws IOException {
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-        ByteArrayResource fileResource = new ByteArrayResource(file.getBytes()) {
-            @Override
-            public String getFilename() {
-                return file.getOriginalFilename();
-            }
-        };
+        ByteArrayResource fileResource =
+                new ByteArrayResource(file.getBytes()) {
 
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+                    @Override
+                    public String getFilename() {
+                        return file.getOriginalFilename();
+                    }
+                };
+
+        MultiValueMap<String, Object> body =
+                new LinkedMultiValueMap<>();
+
         body.add("file", fileResource);
 
-        HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
+        HttpEntity<MultiValueMap<String, Object>> request =
+                new HttpEntity<>(body, headers);
 
-        ResponseEntity<AnalyzeResult> response = restTemplate.postForEntity(
-                aiServerUrl + "/analyze",
-                request,
-                AnalyzeResult.class
-        );
+        ResponseEntity<AnalyzeResult> response =
+                restTemplate.postForEntity(
+                        aiServerUrl + "/analyze",
+                        request,
+                        AnalyzeResult.class
+                );
+
+        if (response.getBody() == null) {
+            throw new RuntimeException("AI 분석 실패");
+        }
 
         return response.getBody();
     }
