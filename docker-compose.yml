@@ -17,9 +17,10 @@ services:
       SPRING_PROFILES_ACTIVE: docker
 
   ai-server:
+    platform: linux/amd64
     build:
       context: .
-      dockerfile: ./server/ai_server/Dockerfile
+      dockerfile: server/ai_server/Dockerfile
 
     container_name: deepfake-ai
 
