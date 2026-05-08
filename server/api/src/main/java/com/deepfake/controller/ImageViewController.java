@@ -7,23 +7,43 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.MalformedURLException;
+import java.io.File;
+import java.nio.file.Files;
 
 @RestController
 @RequestMapping("/view")
 public class ImageViewController {
 
     @GetMapping("/{filename}")
-    public ResponseEntity<Resource> viewImage(@PathVariable String filename) throws MalformedURLException {
+    public ResponseEntity<Resource> viewImage(
+            @PathVariable String filename
+    ) throws Exception {
 
-        String path = System.getProperty("user.dir") + "/uploads/" + filename;
+        String path =
+                System.getProperty("user.dir")
+                        + "/uploads/"
+                        + filename;
 
-        Resource resource = new UrlResource("file:" + path);
+        File file = new File(path);
+
+        Resource resource =
+                new UrlResource(file.toURI());
+
+        String contentType =
+                Files.probeContentType(file.toPath());
+
+        if (contentType == null) {
+            contentType = "application/octet-stream";
+        }
 
         return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG) // ⭐ 이미지 타입
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + filename + "\"") // ⭐ 핵심
+                .contentType(
+                        MediaType.parseMediaType(contentType)
+                )
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + filename + "\""
+                )
                 .body(resource);
     }
 }

@@ -8,9 +8,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
 
 @Component
 public class FaceShieldClient {
@@ -24,27 +21,38 @@ public class FaceShieldClient {
         this.restTemplate = restTemplate;
     }
 
-    public AnalyzeResult analyze(MultipartFile file) throws IOException {
+    // MultipartFile 대신 byte[] + filename을 받도록 변경
+    // → @Async 컨텍스트에서도 안전하게 호출 가능
+    public AnalyzeResult analyze(byte[] fileBytes, String originalName) {
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-        ByteArrayResource fileResource = new ByteArrayResource(file.getBytes()) {
-            @Override
-            public String getFilename() {
-                return file.getOriginalFilename();
-            }
-        };
+        ByteArrayResource fileResource =
+                new ByteArrayResource(fileBytes) {
+                    @Override
+                    public String getFilename() {
+                        return originalName;
+                    }
+                };
 
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        MultiValueMap<String, Object> body =
+                new LinkedMultiValueMap<>();
         body.add("file", fileResource);
 
-        HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
+        HttpEntity<MultiValueMap<String, Object>> request =
+                new HttpEntity<>(body, headers);
 
-        ResponseEntity<AnalyzeResult> response = restTemplate.postForEntity(
-                aiServerUrl + "/analyze",
-                request,
-                AnalyzeResult.class
-        );
+        ResponseEntity<AnalyzeResult> response =
+                restTemplate.postForEntity(
+                        aiServerUrl + "/analyze",
+                        request,
+                        AnalyzeResult.class
+                );
+
+        if (response.getBody() == null) {
+            throw new RuntimeException("AI 분석 실패");
+        }
 
         return response.getBody();
     }

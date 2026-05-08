@@ -5,16 +5,21 @@ import com.deepfake.domain.User;
 import com.deepfake.dto.AnalyzeResult;
 import com.deepfake.dto.ImageResponse;
 import com.deepfake.dto.ImageUploadResponse;
+import com.deepfake.entity.ImageStatus;
 import com.deepfake.external.FaceShieldClient;
 import com.deepfake.repository.ImageRepository;
 import com.deepfake.repository.UserRepository;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,82 +30,165 @@ public class ImageService {
     private final FaceShieldClient faceShieldClient;
 
     @Autowired
-    public ImageService(ImageRepository imageRepository, UserRepository userRepository, FaceShieldClient faceShieldClient) {
+    public ImageService(
+            ImageRepository imageRepository,
+            UserRepository userRepository,
+            FaceShieldClient faceShieldClient
+    ) {
         this.imageRepository = imageRepository;
         this.userRepository = userRepository;
         this.faceShieldClient = faceShieldClient;
     }
 
-    public ImageUploadResponse uploadImage(MultipartFile file, Long userId) {
+    public ImageUploadResponse uploadImage(
+            MultipartFile file,
+            Long userId
+    ) {
 
         try {
+
             User user = null;
+
             if (userId != null) {
                 user = userRepository.findById(userId)
-                        .orElseThrow(() -> new RuntimeException("유저 없음"));
+                        .orElseThrow(() ->
+                                new RuntimeException("유저 없음"));
             }
 
-            String fileName = saveFile(file);
+            // 파일 바이트를 요청 컨텍스트 안에서 미리 추출
+            // (MultipartFile은 @Async 컨텍스트에서 재사용 불가)
+            byte[] fileBytes = file.getBytes();
+            String originalName = file.getOriginalFilename();
+
+            if (originalName == null || originalName.isBlank()) {
+                throw new RuntimeException("파일 이름 없음");
+            }
+
+            // 파일 저장
+            String savedName = saveFile(fileBytes, originalName);
 
             Image image = new Image(
-                    file.getOriginalFilename(),
-                    fileName,
+                    originalName,
+                    savedName,
                     user
             );
 
+            image.setStatus(ImageStatus.PENDING);
             imageRepository.save(image);
 
-            String url = "http://localhost:8080/uploads/" + fileName;
+            // AI 분석 — byte[]로 전달하여 비동기 컨텍스트에서도 안전하게 사용
+            analyzeAsync(image.getId(), fileBytes, originalName);
 
-            AnalyzeResult analyzeResult = faceShieldClient.analyze(file);
+            String url = "http://localhost:8080/view/" + savedName;
 
-            return new ImageUploadResponse(image.getId(), url, analyzeResult);
+            return new ImageUploadResponse(
+                    image.getId(),
+                    url,
+                    null
+            );
 
         } catch (IOException e) {
             throw new RuntimeException("파일 저장 실패");
         }
     }
 
+    @Async
+    public void analyzeAsync(
+            Long imageId,
+            byte[] fileBytes,
+            String originalName
+    ) {
+
+        Image image = imageRepository.findById(imageId)
+                .orElseThrow(() ->
+                        new RuntimeException("이미지 없음"));
+
+        try {
+
+            image.setStatus(ImageStatus.ANALYZING);
+            imageRepository.save(image);
+
+            AnalyzeResult result =
+                    faceShieldClient.analyze(fileBytes, originalName);
+
+            if (result.getRisk() != null) {
+                image.setRiskScore(result.getRisk().getScore());
+            }
+
+            image.setStatus(ImageStatus.COMPLETED);
+            imageRepository.save(image);
+
+        } catch (Exception e) {
+
+            image.setStatus(ImageStatus.FAILED);
+            image.setErrorMessage(e.getMessage());
+            imageRepository.save(image);
+
+            e.printStackTrace();
+        }
+    }
+
     public List<ImageResponse> getMyImages(Long userId) {
 
-        if (userId == null) throw new RuntimeException("유저 없음");
-
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("유저 없음"));
+                .orElseThrow(() ->
+                        new RuntimeException("유저 없음"));
 
         return imageRepository.findByUser(user)
                 .stream()
                 .map(img -> new ImageResponse(
                         img.getId(),
                         img.getFileName(),
-                        "http://localhost:8080/uploads/" + img.getFilePath()
+                        "http://localhost:8080/view/" + img.getFilePath(),
+                        img.getStatus().name(),
+                        img.getRiskScore(),
+                        img.getResultPath(),
+                        img.getErrorMessage()
                 ))
                 .collect(Collectors.toList());
     }
 
-    private String saveFile(MultipartFile file) throws IOException {
+    public ImageResponse getImageResult(Long imageId) {
 
-        String uploadDir = System.getProperty("user.dir") + "/uploads/";
+        Image img = imageRepository.findById(imageId)
+                .orElseThrow(() ->
+                        new RuntimeException("이미지 없음"));
+
+        return new ImageResponse(
+                img.getId(),
+                img.getFileName(),
+                "http://localhost:8080/view/" + img.getFilePath(),
+                img.getStatus().name(),
+                img.getRiskScore(),
+                img.getResultPath(),
+                img.getErrorMessage()
+        );
+    }
+
+    private String saveFile(byte[] fileBytes, String originalName)
+            throws IOException {
+
+        String uploadDir =
+                System.getProperty("user.dir") + "/uploads/";
+
         File dir = new File(uploadDir);
-        if (!dir.exists()) dir.mkdirs();
-
-        String originalFileName = file.getOriginalFilename();
-        if (originalFileName == null) throw new IOException("파일명 없음");
-        File saveFile = new File(uploadDir + originalFileName);
-
-        int count = 1;
-
-        while (saveFile.exists()) {
-            int dot = originalFileName.lastIndexOf(".");
-            String name = originalFileName.substring(0, dot);
-            String ext = originalFileName.substring(dot);
-
-            String newName = name + "(" + count + ")" + ext;
-            saveFile = new File(uploadDir + newName);
-            count++;
+        if (!dir.exists()) {
+            dir.mkdirs();
         }
 
-        file.transferTo(saveFile);
+        // 확장자 없는 파일명 방어 처리
+        int dotIndex = originalName.lastIndexOf(".");
+        String extension = (dotIndex >= 0)
+                ? originalName.substring(dotIndex)
+                : "";
+
+        String savedName = UUID.randomUUID() + extension;
+        File saveFile = new File(uploadDir + savedName);
+
+        Files.write(saveFile.toPath(), fileBytes);
+
+        System.out.println("저장 완료: " + saveFile.getAbsolutePath());
+        System.out.println("저장 파일 크기: " + saveFile.length());
 
         return saveFile.getName();
     }

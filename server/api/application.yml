@@ -14,6 +14,12 @@ spring:
     console:
       enabled: true
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 # FastAPI AI 서버 주소
 # 로컬: 환경변수 없으면 localhost:8000 기본값 사용
 # RunPod 배포 시: AI_SERVER_URL=https://{pod-id}-8000.proxy.runpod.net 환경변수 설정
