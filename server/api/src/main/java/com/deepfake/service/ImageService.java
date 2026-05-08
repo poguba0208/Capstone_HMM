@@ -1,13 +1,15 @@
 package com.deepfake.service;
+
 import com.deepfake.domain.Image;
 import com.deepfake.domain.User;
 import com.deepfake.dto.AnalyzeResult;
 import com.deepfake.dto.ImageResponse;
 import com.deepfake.dto.ImageUploadResponse;
+import com.deepfake.entity.ImageStatus;
 import com.deepfake.external.FaceShieldClient;
 import com.deepfake.repository.ImageRepository;
 import com.deepfake.repository.UserRepository;
-import com.deepfake.entity.ImageStatus;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -47,29 +50,36 @@ public class ImageService {
             User user = null;
 
             if (userId != null) {
-
                 user = userRepository.findById(userId)
                         .orElseThrow(() ->
                                 new RuntimeException("유저 없음"));
             }
 
-            String savedName = saveFile(file);
+            // 파일 바이트를 요청 컨텍스트 안에서 미리 추출
+            // (MultipartFile은 @Async 컨텍스트에서 재사용 불가)
+            byte[] fileBytes = file.getBytes();
+            String originalName = file.getOriginalFilename();
+
+            if (originalName == null || originalName.isBlank()) {
+                throw new RuntimeException("파일 이름 없음");
+            }
+
+            // 파일 저장
+            String savedName = saveFile(fileBytes, originalName);
 
             Image image = new Image(
-                    file.getOriginalFilename(),
+                    originalName,
                     savedName,
                     user
             );
 
             image.setStatus(ImageStatus.PENDING);
-
             imageRepository.save(image);
 
-            analyzeAsync(image.getId(), file);
+            // AI 분석 — byte[]로 전달하여 비동기 컨텍스트에서도 안전하게 사용
+            analyzeAsync(image.getId(), fileBytes, originalName);
 
-            String url =
-                    "http://localhost:8080/uploads/"
-                            + savedName;
+            String url = "http://localhost:8080/view/" + savedName;
 
             return new ImageUploadResponse(
                     image.getId(),
@@ -78,7 +88,6 @@ public class ImageService {
             );
 
         } catch (IOException e) {
-
             throw new RuntimeException("파일 저장 실패");
         }
     }
@@ -86,41 +95,36 @@ public class ImageService {
     @Async
     public void analyzeAsync(
             Long imageId,
-            MultipartFile file
+            byte[] fileBytes,
+            String originalName
     ) {
 
-        Image image =
-                imageRepository.findById(imageId)
-                        .orElseThrow(() ->
-                                new RuntimeException("이미지 없음"));
+        Image image = imageRepository.findById(imageId)
+                .orElseThrow(() ->
+                        new RuntimeException("이미지 없음"));
 
         try {
 
             image.setStatus(ImageStatus.ANALYZING);
-
             imageRepository.save(image);
 
             AnalyzeResult result =
-                    faceShieldClient.analyze(file);
+                    faceShieldClient.analyze(fileBytes, originalName);
 
             if (result.getRisk() != null) {
-
-                image.setRiskScore(
-                        result.getRisk().getScore()
-                );
+                image.setRiskScore(result.getRisk().getScore());
             }
 
             image.setStatus(ImageStatus.COMPLETED);
-
             imageRepository.save(image);
 
         } catch (Exception e) {
 
             image.setStatus(ImageStatus.FAILED);
-
             image.setErrorMessage(e.getMessage());
-
             imageRepository.save(image);
+
+            e.printStackTrace();
         }
     }
 
@@ -135,8 +139,7 @@ public class ImageService {
                 .map(img -> new ImageResponse(
                         img.getId(),
                         img.getFileName(),
-                        "http://localhost:8080/uploads/"
-                                + img.getFilePath(),
+                        "http://localhost:8080/view/" + img.getFilePath(),
                         img.getStatus().name(),
                         img.getRiskScore(),
                         img.getResultPath(),
@@ -154,8 +157,7 @@ public class ImageService {
         return new ImageResponse(
                 img.getId(),
                 img.getFileName(),
-                "http://localhost:8080/uploads/"
-                        + img.getFilePath(),
+                "http://localhost:8080/view/" + img.getFilePath(),
                 img.getStatus().name(),
                 img.getRiskScore(),
                 img.getResultPath(),
@@ -163,34 +165,30 @@ public class ImageService {
         );
     }
 
-    private String saveFile(MultipartFile file)
+    private String saveFile(byte[] fileBytes, String originalName)
             throws IOException {
 
         String uploadDir =
-                System.getProperty("user.dir")
-                        + "/uploads/";
+                System.getProperty("user.dir") + "/uploads/";
 
         File dir = new File(uploadDir);
-
         if (!dir.exists()) {
             dir.mkdirs();
         }
 
-        String originalName =
-                file.getOriginalFilename();
+        // 확장자 없는 파일명 방어 처리
+        int dotIndex = originalName.lastIndexOf(".");
+        String extension = (dotIndex >= 0)
+                ? originalName.substring(dotIndex)
+                : "";
 
-        String extension =
-                originalName.substring(
-                        originalName.lastIndexOf(".")
-                );
+        String savedName = UUID.randomUUID() + extension;
+        File saveFile = new File(uploadDir + savedName);
 
-        String savedName =
-                UUID.randomUUID() + extension;
+        Files.write(saveFile.toPath(), fileBytes);
 
-        File saveFile =
-                new File(uploadDir + savedName);
-
-        file.transferTo(saveFile);
+        System.out.println("저장 완료: " + saveFile.getAbsolutePath());
+        System.out.println("저장 파일 크기: " + saveFile.length());
 
         return saveFile.getName();
     }
