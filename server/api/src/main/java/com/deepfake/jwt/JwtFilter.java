@@ -30,13 +30,15 @@ public class JwtFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        System.out.println("🔍 JwtFilter 진입: " + request.getRequestURI());
 
         String path = request.getRequestURI();
 
         // 인증 없이 허용할 경로
         // - 회원가입 / 로그인
         // - 이미지 뷰 (업로드 후 URL로 접근 시 토큰 불필요)
-        if (path.startsWith("/api/users") || path.startsWith("/view")) {
+        // 인증 없이 허용할 경로
+        if (path.startsWith("/api/users") || path.startsWith("/view") || path.startsWith("/api/images")) {
             filterChain.doFilter(request, response);
             return;
         }
