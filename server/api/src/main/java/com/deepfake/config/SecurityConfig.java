@@ -38,7 +38,8 @@ public class SecurityConfig {
                         // 이미지 업로드 허용
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/images/upload"
+                                "/api/images/upload",
+                                "/api/images/analyze"
                         ).permitAll()
 
                         // 이미지 조회 허용
