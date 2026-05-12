@@ -4,48 +4,83 @@ struct ResultLoadingView: View {
     let image: UIImage
     @Environment(\.dismiss) private var dismiss
 
-    @State private var result: ImageResponse?
-    @State private var isLoading = true
+    @State private var analyzeResult: AnalyzeResponse?
+    @State private var filterResult: ImageResponse?
+    @State private var phase: Phase = .analyzing
     @State private var isError = false
+
+    enum Phase {
+        case analyzing      // 위험도 분석 중
+        case showRisk       // 위험도 결과 표시
+        case filtering      // 필터 적용 중
+        case showResult     // 필터 결과 표시
+    }
 
     var body: some View {
         Group {
-            if let result = result {
-                ResultView(image: image, result: result, onDismiss: { dismiss() })
-                    .navigationBarHidden(true)
-            } else {
-                VStack(spacing: 20) {
-                    if isLoading {
-                        Text("AI 분석 중...")
-                            .font(.title2)
-                        ProgressView()
-                    }
-                    if isError {
-                        Text("업로드 실패 😢")
-                            .foregroundColor(.red)
-                        Button("다시 시도") {
-                            upload()
-                        }
-                    }
+            switch phase {
+            case .analyzing:
+                loadingView(message: "위험도 분석 중...")
+
+            case .showRisk:
+                if let analyze = analyzeResult {
+                    RiskResultView(
+                        image: image,
+                        analyzeResult: analyze,
+                        onApplyFilter: { applyFilter() },
+                        onDismiss: { dismiss() }
+                    )
+                }
+
+            case .filtering:
+                loadingView(message: "필터 적용 중...")
+
+            case .showResult:
+                if let result = filterResult {
+                    ResultView(image: image, result: result, onDismiss: { dismiss() })
+                        .navigationBarHidden(true)
                 }
             }
         }
         .navigationBarHidden(true)
-        .onAppear { upload() }
+        .onAppear { analyze() }
     }
 
-    func upload() {
-        isLoading = true
-        isError = false
-
-        uploadImage(image: image) { res in
-            isLoading = false
-            if let res = res {
-                print("✅ 성공: \(res)")
-                self.result = res
+    @ViewBuilder
+    func loadingView(message: String) -> some View {
+        VStack(spacing: 20) {
+            if isError {
+                Text("분석 실패 😢").foregroundColor(.red)
+                Button("다시 시도") { analyze() }
             } else {
-                print("❌ 실패: res가 nil")
-                self.isError = true
+                Text(message).font(.title2)
+                ProgressView()
+            }
+        }
+    }
+
+    func analyze() {
+        isError = false
+        phase = .analyzing
+        analyzeImage(image: image) { result in
+            if let result = result {
+                analyzeResult = result
+                phase = .showRisk
+            } else {
+                isError = true
+            }
+        }
+    }
+
+    func applyFilter() {
+        phase = .filtering
+        uploadImage(image: image) { result in
+            if let result = result {
+                filterResult = result
+                phase = .showResult
+            } else {
+                isError = true
+                phase = .showRisk
             }
         }
     }
